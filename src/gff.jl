@@ -28,23 +28,22 @@ end
 function writeGFF(record::GenomicAnnotations.Record, outfile::String; reportpseudos = false)
     gffrecord = copy(record)
     gffrecord.sequence = dna""
-    open(GFF.Writer, outfile) do out
-        addgene!(gffrecord, :region, ClosedSpan(1:length(record.sequence));
-                Name = record.name,
-                ID = record.name,
-                Is_circular = record.circular)
-
-        #remove pseudogenes
-        pseudogenes = filter(x -> feature(x) == :pseudo, gffrecord.genes)
-        pseudoids = get.(pseudogenes, :ID, "")
-        for g in gffrecord.genes
-            if get(g, :Parent, "") ∈ pseudoids
-                push!(pseudoids, get(g, :ID, ""))
-                push!(pseudogenes, g)
-            end
+    addgene!(gffrecord, :region, ClosedSpan(1:length(record.sequence));
+            Name = record.name,
+            ID = record.name,
+            Is_circular = record.circular)
+    #catalogue pseudogenes
+    pseudogenes = filter(x -> feature(x) == :pseudo, gffrecord.genes)
+    pseudoids = get.(pseudogenes, :ID, "")
+    for g in gffrecord.genes
+        if get(g, :Parent, "") ∈ pseudoids
+            push!(pseudoids, get(g, :ID, ""))
+            push!(pseudogenes, g)
         end
-        blacklist = sort!(unique!(index.(pseudogenes)))
-        sort!(gffrecord.genes)
+    end
+    blacklist = sort!(unique!(index.(pseudogenes)))
+    sort!(gffrecord.genes)
+    open(GFF.Writer, outfile) do out
         printgff(out.output, gffrecord, blacklist; reportpseudos = reportpseudos)
     end
 end

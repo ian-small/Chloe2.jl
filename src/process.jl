@@ -1,5 +1,6 @@
 const minORF = 39
 const transspliced = ["rps12"]
+const fusedparts = ["petB_1", "petD_1", "rpl16_1", "rps12_5"]
 
 MayBeString = Union{Nothing,String}
 
@@ -25,6 +26,38 @@ function build_transspliced_genes!(transsplicedparts, transsplicedgms)
     if ~extended; return transsplicedgms; end
     union!(transsplicedgms, gmstoadd)
     build_transspliced_genes!(transsplicedparts, transsplicedgms)
+end
+
+function fix_exon_borders!(gm::Vector{FeatureMatch}, genome, fstarts, fstartcodons, fstops, rev_genome, rstarts, rstartcodons, rstops)
+    glength = length(genome)
+    firstexon = first(gm)
+    #fix start & stop codons
+    if ~ismissing(firstexon) && firstexon.type == "CDS"
+        if firstexon.strand == '+'
+            hmm_start_codon = genome[firstexon.target_from:firstexon.target_from+2]
+            (starts, startcodons, stops) =  (fstarts, fstartcodons, fstops)
+        else
+            hmm_start_codon = rev_genome[firstexon.target_from:firstexon.target_from+2]
+            (starts, startcodons, stops) =  (rstarts, rstartcodons, rstops)
+        end
+        if hmm_start_codon ∉ [dna"ATG", dna"GTG", dna"ACG"] # assume that if predicted start is ACG it is edited to AUG
+            fix_start_codon!(gm, (starts, startcodons, stops), glength)
+        end
+    end
+    lastexon = last(gm)
+    if ~ismissing(lastexon) && lastexon.type == "CDS"
+        if lastexon.strand == '+'
+            hmm_stop_codon = genome[lastexon.target_from+lastexon.target_length:lastexon.target_from+lastexon.target_length+2]
+            stops = fstops
+        else
+            hmm_stop_codon = rev_genome[lastexon.target_from+lastexon.target_length:lastexon.target_from+lastexon.target_length+2]
+            stops = rstops
+        end
+        fix_stop_codon!(gm, hmm_stop_codon, stops, glength)
+    end
+    #if gene(gm) == "trnK-UUU"; println(gm); end
+    fix_splice_junctions!(gm, glength)
+    gm
 end
 
 function chloeone(tempfile::TempFile, infile::String, edits::MayBeString; sensitivity = false, reportpseudos = false)
@@ -129,7 +162,7 @@ function chloeone(tempfile::TempFile, id::AbstractString, fwd_target::LongDNA{4}
             if part.feature == "intron"
                 t6 = time()
                 for gm in gene_models
-                    intron = parse_intron_tbls(intronsearch(id, genome, part, gm, tempfile; sensitivity = sensitivity), glength)
+                    intron = parse_intron_tbl(intronsearch(id, genome, part, gm, tempfile; sensitivity = sensitivity), glength)
                     if ~ismissing(intron)
                         push!(gm, intron)
                     end
@@ -138,51 +171,23 @@ function chloeone(tempfile::TempFile, id::AbstractString, fwd_target::LongDNA{4}
                 intron_search_time += t7 -t6
             end
         end
-        #if last(key) == "rps16"; println(gene_models); end
+        #if last(key) == "trnI-GAU"; println(gene_models); end
         #finalise gene models
         transsplicedparts = Set{Vector{FeatureMatch}}()
         for gm in gene_models
             isempty(gm) && continue
             sort!(gm; by = x -> (only(partorder(x)), x.target_from))
             for part in eachrow(parts)
-                if isnothing(findfirst(x -> gene(x) == part.gene && only(partorder(x)) == part.order, gm))
-                    fill_missing_exon!(gm, part)
+                if "$(part.gene)_$(part.order)" ∈ fusedparts
+                    fill_missing_exon!("$(part.gene)_$(part.order)", gm)
+                    #if gene(gm) == "petB"; println(gm); end
                 end
             end
-            #if last(key) == "rps12"; println(gm); end
-            fix_splice_junctions!(gm, glength)
-            #if last(key) == "clpP1"; println(gm); end
-            #fix start & stop codons
-            firstexon = first(gm)
-            if ~ismissing(firstexon) && firstexon.type == "CDS"
-                if firstexon.strand == '+'
-                    hmm_start_codon = genome[firstexon.target_from:firstexon.target_from+2]
-                    (starts, startcodons, stops) =  (fstarts, fstartcodons, fstops)
-                else
-                    hmm_start_codon = rev_genome[firstexon.target_from:firstexon.target_from+2]
-                    (starts, startcodons, stops) =  (rstarts, rstartcodons, rstops)
-                end
-                if hmm_start_codon ∉ [dna"ATG", dna"GTG", dna"ACG"] # assume that if predicted start is ACG it is edited to AUG
-                    fix_start_codon!(gm, (starts, startcodons, stops), glength)
-                end
-            end
-            #if last(key) == "rps16"; println(gm); end
-            lastexon = last(gm)
-            if ~ismissing(lastexon) && lastexon.type == "CDS"
-                if lastexon.strand == '+'
-                    hmm_stop_codon = genome[lastexon.target_from+lastexon.target_length:lastexon.target_from+lastexon.target_length+2]
-                    stops = fstops
-                else
-                    hmm_stop_codon = rev_genome[lastexon.target_from+lastexon.target_length:lastexon.target_from+lastexon.target_length+2]
-                    stops = rstops
-                end
-                fix_stop_codon!(gm, hmm_stop_codon, stops, glength)
-            end
-            #if last(key) == "rps16"; println(gm); end
             if last(key) ∈ transspliced
                 push!(transsplicedparts, gm)
             else
-                addgene2record!(tempfile.uuid, record, genome, rev_genome, parts, unique(gm))
+                fix_exon_borders!(gm, genome, fstarts, fstartcodons, fstops, rev_genome, rstarts, rstartcodons, rstops)
+                addgene2record!(tempfile.uuid, record, genome, rev_genome, parts, gm)
             end
         end
         if ~isempty(transsplicedparts)
@@ -190,7 +195,8 @@ function chloeone(tempfile::TempFile, id::AbstractString, fwd_target::LongDNA{4}
             push!(transsplicedgms, Vector{FeatureMatch}(undef,0))
             tgenes = build_transspliced_genes!(transsplicedparts, transsplicedgms)
             for tgene in tgenes
-                addgene2record!(tempfile.uuid, record, genome, rev_genome, parts, unique(tgene))
+                fix_exon_borders!(tgene, genome, fstarts, fstartcodons, fstops, rev_genome, rstarts, rstartcodons, rstops)
+                addgene2record!(tempfile.uuid, record, genome, rev_genome, parts, tgene)
             end
         end
     end

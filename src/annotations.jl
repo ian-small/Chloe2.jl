@@ -58,7 +58,6 @@ end
 function addgene2record!(uid::UUID, record::GenomicAnnotations.Record, genome, rev_genome, parts, features::Vector{FeatureMatch})
     isempty(features) && return
     glength = length(record.sequence)
-    #if gene(first(features)) == "clpP1"; println(features); end
 
     #merge adjacent features of same type (e.g. because intron has been lost in this gene)
     merged_features = FeatureMatch[]
@@ -73,13 +72,15 @@ function addgene2record!(uid::UUID, record::GenomicAnnotations.Record, genome, r
     end
     push!(merged_features, previous_feature)
     features = merged_features
-    #if gene(first(features)) == "clpP1"; println(features); end
+    #if gene(first(features)) == "ycf2"; println(features); end
 
     #validate gene before adding it to the record
     #println(features)
     problems = String[]
     # check it has all its essential parts
-    if any(filter(x -> x.essential == 1, parts).order .∉ Ref(reduce(vcat, partorder.(features))))
+    essential_parts = filter(x -> x.essential == 1, parts)
+    essential_part_strings = essential_parts.gene .* "_" .* essential_parts.order
+    if any(essential_part_strings .∉ Ref(reduce(vcat, getproperty.(features, :queryparts))))
         #if gene(first(features)) == "clpP1"; println(filter(x -> x.essential == 1, parts).order, "\t", partorder.(features)); end
         push!(problems, LACKS_ESSENTIAL_FEATURE)
     end
@@ -99,7 +100,7 @@ function addgene2record!(uid::UUID, record::GenomicAnnotations.Record, genome, r
             end
         end
     end
-    #if gene(first(features)) == "rps16"; println(problems); end
+    #if gene(first(features)) == "petD";println(features); println(problems);end
     #~isempty(problems) && return
     
     #gene
@@ -143,5 +144,5 @@ function flag_duplicates!(record::GenomicAnnotations.Record)
         end
     end
     record
-    #all but min evalue set to pseudogene; delete features of which pseudogene is a parent
+    #all but min evalue set to pseudogene
 end

@@ -74,7 +74,6 @@ function parse_trn_alignments(results::IOBuffer, glength::Integer)
         push!(trns, FeatureMatch(target, [query], tstrand, "tRNA", qfrom, parse(Int, bits[8]), target_from, tto - target_from + 1, parse(Float64, bits[3])))
     end
     close(results)
-    #println(filter(x -> startswith(only(x.queryparts), "trnI-GAU"), trns))
     rationalise_matches!(trns, glength)
 end
 

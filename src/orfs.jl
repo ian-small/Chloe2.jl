@@ -74,8 +74,6 @@ function parse_domt(results::IOBuffer, glength::Integer)
         model_to = parse(Int32, bits[17])
         orfalifrom = parse(Int32, bits[20])
         orfalito = parse(Int32, bits[21])
-        #orfalifrom -= model_from - 1
-        #orfalito += parse(Int32, bits[6]) - model_to
         ali_from = seqstart + 3 * (orfalifrom - 1)
         ali_length = 3 * (orfalito - orfalifrom + 1)
         #ali_from > glength && continue # don't retain matches starting in extension
@@ -176,32 +174,23 @@ function fix_stop_codon!(gene_model, stop_codon, stops, glength)
     lastexon.target_length += 3 # to include stop in last exon
 end
 
-function fill_missing_exon!(gene_model, template)
+function fill_missing_exon!(part, gene_model)
     #gene-specific cases due to joint CDS/intron models
-    if template.gene == "petB"
+    if only(first(gene_model).queryparts) ∈ ["petB_2a", "petD_2a", "rpl16_2a"]
         intron = first(gene_model)
-        pushfirst!(gene_model, FeatureMatch("petB*$(intron.strand)*$(mod1(intron.target_from, 3))*$(string(intron.target_from))-$(string(intron.target_from + 5))", ["petB_1"], intron.strand, "CDS", 1, 6, intron.target_from, 6, intron.evalue))
-        intron.target_from += 6
-        intron.target_length -= 6
-    elseif template.gene == "petD"
-        intron = first(gene_model)
-        pushfirst!(gene_model, FeatureMatch("petD*$(intron.strand)*$(mod1(intron.target_from, 3))*$(string(intron.target_from))-$(string(intron.target_from + 7))", ["petD_1"], intron.strand, "CDS", 1, 8, intron.target_from, 8, intron.evalue))
-        intron.target_from += 8
-        intron.target_length -= 8
-    elseif template.gene == "rpl16"
-        intron = first(gene_model)
-        pushfirst!(gene_model, FeatureMatch("rpl16*$(intron.strand)*$(mod1(intron.target_from, 3))*$(string(intron.target_from))-$(string(intron.target_from + 8))", ["rpl16_1"], intron.strand, "CDS", 1, 9, intron.target_from, 9, intron.evalue))
-        intron.target_from += 9
-        intron.target_length -= 9
-    elseif template.gene == "rps12" && template.order == 6
-        if only(partorder(last(gene_model))) == 5   #rps12 has second intron
+        pushfirst!(gene_model, FeatureMatch("$(intron.target_id)*$(intron.strand)*$(mod1(intron.target_from, 3))*$(string(intron.target_from))-$(string(intron.target_from + model_lengths[part] - 1))",
+             [part], intron.strand, "CDS", 1, model_lengths[part], intron.target_from, model_lengths[part], intron.evalue))
+        intron.target_from += model_lengths[part]
+        intron.target_length -= model_lengths[part]
+    elseif part == "rps12_5"
+        if only(partorder(last(gene_model))) == 4   #rps12 has second intron
             intron = last(gene_model)
             exonstart = intron.target_from + intron.target_length
             frame = mod1(exonstart + 2, 3) #rps12_6 is always phase 2
-            push!(gene_model, FeatureMatch("rps12*$(intron.strand)*$(string(frame))*$(string(exonstart))-$(string(exonstart + 25))", ["rps12_6"], intron.strand, "CDS", 1, 26, exonstart, 26, intron.evalue))
-        elseif only(partorder(last(gene_model))) == 4 #rps12 lacks second intron
+            push!(gene_model, FeatureMatch("$(intron.target_id)*$(intron.strand)*$(string(frame))*$(string(exonstart))-$(string(exonstart + 25))", ["rps12_5"], intron.strand, "CDS", 1, 26, exonstart, 26, intron.evalue))
+        elseif only(partorder(last(gene_model))) == 3 #rps12 lacks second intron
             exon = last(gene_model)
-            push!(gene_model, FeatureMatch(exon.target_id, ["rps12_6"], exon.strand, "CDS", 1, 26, exon.target_from + exon.target_length, 26, exon.evalue))
+            push!(gene_model, FeatureMatch(exon.target_id, ["rps12_5"], exon.strand, "CDS", 1, 26, exon.target_from + exon.target_length, 26, exon.evalue))
         end
     end
 end
@@ -213,6 +202,18 @@ end
 #calculate new frame when frame wraps the end of the genome
 function wrapframe(frame, glength)
     mod1(frame - mod1(glength, 3), 3)
+end
+
+#relies on target_id having the form id*strand*frame*start*stop
+function frame(f::FeatureMatch)
+    @assert f.type == "CDS"
+    parse(Int, split(f.target_id, "*")[3])
+end
+
+#Check if two CDS Features are in-frame
+function in_frame(f1::FeatureMatch, f2::FeatureMatch)
+    @assert f1.type == "CDS" && f2.type == "CDS"
+    frame(f1) == frame(f2)
 end
 
 function splice(gm::Vector{FeatureMatch}, genome, rev_genome)

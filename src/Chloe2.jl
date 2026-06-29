@@ -15,7 +15,7 @@ using Printf
 
 export main, chloe, chloeone, writeGFF, tempfilename, TempFile
 
-const chloe2models = joinpath(artifact"Chloe2_models", "Chloe2_models-2.0.0-alpha", "models")
+const chloe2models = joinpath(artifact"Chloe2_models", "Chloe2_models-2.0.0-alpha.1", "models")
 
 include("tempfile.jl")
 include("circularity.jl")

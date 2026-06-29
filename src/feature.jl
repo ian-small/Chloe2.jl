@@ -1,3 +1,37 @@
+# model length in nucleotides
+const model_lengths = Dict{String, Int}("petB_1" => 6, "petD_1" => 8, "rpl16_1" => 9, "rps12_5" => 26)
+
+function get_model_lengths()
+    cmfiles  = filter!(x -> endswith(x, ".cm"), readdir(joinpath(chloe2models, "introns"); join = true))
+    for f in cmfiles
+        open(f) do incm
+            line = only(filter!(x -> startswith(x, "LENG  "), readlines(incm)))
+            model_lengths[first(split(basename(f), "."))] = parse(Int, last(split(line)))
+        end
+    end
+    open(joinpath(chloe2models, "trns", "all_trns.cm")) do incm
+        name = ""
+        for line in readlines(incm)
+            if startswith(line, "NAME  "); name = last(split(line)); end
+            if startswith(line, "LENG  "); model_lengths[name] = parse(Int, last(split(line))); end
+        end
+    end
+    open(joinpath(chloe2models, "cds", "all_cds.hmm")) do inhmm
+        name = ""
+        for line in readlines(inhmm)
+            if startswith(line, "NAME  "); name = last(split(line)); end
+            if startswith(line, "LENG  "); model_lengths[name] = 3 * parse(Int, last(split(line))); end #3 to give length in nucleotides
+        end
+    end
+    open(joinpath(chloe2models, "rrns", "all_rrns.hmm")) do inhmm
+        name = ""
+        for line in readlines(inhmm)
+            if startswith(line, "NAME  "); name = last(split(line)); end
+            if startswith(line, "LENG  "); model_lengths[name] = parse(Int, last(split(line))); end
+        end
+    end
+end
+
 # unified struct to cover all matches of HMMs or CMs; target coordinates are from the 5' end of the strand.
 mutable struct FeatureMatch
     target_id::String
@@ -21,7 +55,7 @@ end
 
 function partorder(fm::FeatureMatch)
     sort!(fm.queryparts)
-    parse.(Int, last.(split.(fm.queryparts, "_")))
+    parse.(Int, getindex.(getproperty.(match.(r"_([0-9])[a|b]?", fm.queryparts), :captures), 1))
 end
 
 Base.length(fm::FeatureMatch) = fm.target_length
@@ -48,7 +82,7 @@ function merge_matches(m1::FeatureMatch, m2::FeatureMatch, glength::Integer)
     m1 = sorted_features[1]
     m2 = sorted_features[2]
     # removes a and b suffixes from split intron models
-    for i in eachindex(m1.queryparts)
+#=     for i in eachindex(m1.queryparts)
         if ~isdigit(last(m1.queryparts[i]))
             m1.queryparts[i] = m1.queryparts[i][1:end-1]
         end
@@ -57,7 +91,7 @@ function merge_matches(m1::FeatureMatch, m2::FeatureMatch, glength::Integer)
         if ~isdigit(last(m2.queryparts[i]))
             m2.queryparts[i] = m2.queryparts[i][1:end-1]
         end
-    end
+    end =#
     return FeatureMatch(m1.target_id, union(m1.queryparts, m2.queryparts), m1.strand, m1.type, m1.model_from, m2.model_to, m1.target_from,
         circulardistance(m1.target_from, m2.target_from + m2.target_length, glength), min(m1.evalue, m2.evalue))
 end
@@ -80,7 +114,9 @@ function rationalise_matches!(matches::Vector{FeatureMatch}, glength::Integer)::
         end
         #merge matches if they are hits to different parts of the same model
         modeloverlap = length(intersect(best.model_from:best.model_to, m.model_from:m.model_to)) / min(length(best.model_from:best.model_to), length(m.model_from:m.model_to))
-        if genome_adjacent(best, m, glength) && (best.type ≠ "CDS" || in_frame(best, m)) && modeloverlap < 0.9
+        if best.target_from == m.target_from && modeloverlap == 1.0 #same hit; can happen with overlapping genome fragments
+            push!(todelete, i)
+        elseif genome_adjacent(best, m, glength) && (best.type ≠ "CDS" || in_frame(best, m)) && modeloverlap < 0.9
             matches[bestmatchidx] = merge_matches(best, m, glength)
             push!(todelete, i)
         elseif m.evalue > 1.05 * best.evalue #arbitrary 1.05 x threshold to cover variation in evalue even with identical targets
@@ -103,14 +139,8 @@ function group_duplicates(matches::Vector{FeatureMatch})
     return query_dict
 end
 
-#Check if two CDS Features are in-frame
-function in_frame(f1::FeatureMatch, f2::FeatureMatch)
-    @assert f1.type == "CDS" && f2.type == "CDS"
-    last(f1.target_id) == last(f2.target_id)
-end
-
 #should really check that frame is maintained when fixing junctions for CDS features
-function fix_splice_junctions!(gene_model, glength)
+#= function fix_splice_junctions!(gene_model, glength)
     for (i,feature) in enumerate(gene_model)
         ismissing(feature) && continue
         if feature.type == "intron"
@@ -137,6 +167,83 @@ function fix_splice_junctions!(gene_model, glength)
                         next_feature.target_length += (current_target_from - next_feature.target_from)
                     end
                 end
+            end
+        end
+    end
+end =#
+
+function fix_splice_junctions!(gene_model, glength)
+    for introna in filter(x -> endswith(only(x.queryparts), "a"), gene_model)
+        ismissing(introna) && continue
+        i = only(partorder(introna))
+        previous_exon = missing
+        intronb = missing
+        next_exon = missing
+        if i-1 > 0
+            previous_exon = gene_model[i - 1]
+        end
+        if i + 1 <= length(gene_model)
+            intronb = gene_model[i + 1]
+        end
+        if i + 2 <= length(gene_model)
+            next_exon = gene_model[i + 2]
+        end
+#=         if gene(gene_model) == "trnK-UUU"
+            println(previous_exon)
+            println(introna)
+            println(intronb)
+            println(next_exon)
+        end =#
+        if any(ismissing.((previous_exon, intronb, next_exon))) || previous_exon.type ≠ "CDS" #don't worry about reading frame
+            if ~ismissing(previous_exon) && previous_exon.model_to == model_lengths[only(previous_exon.queryparts)] && previous_exon.evalue < introna.evalue #trust previous exon
+                current_target_from = introna.target_from
+                introna.target_from = previous_exon.target_from + previous_exon.target_length
+                introna.target_length += (current_target_from - introna.target_from)
+            elseif introna.model_from == 1 && introna.evalue < previous_exon.evalue #trust intron instead
+                previous_exon.target_length = circulardistance(previous_exon.target_from, introna.target_from, glength) 
+            end
+            if ~ismissing(next_exon) && next_exon.model_from == 1 && ~ismissing(intronb) && next_exon.evalue < intronb.evalue #trust next exon
+                intronb.target_length = circulardistance(intronb.target_from, next_exon.target_from, glength) 
+            elseif ~ismissing(intronb) && intronb.model_to == model_lengths[only(intronb.queryparts)] && ~ismissing(next_exon) && intronb.evalue < next_exon.evalue #trust intron instead
+                current_target_from = next_exon.target_from
+                next_exon.target_from = intronb.target_from + intronb.target_length
+                next_exon.target_length += (current_target_from - next_exon.target_from) 
+            end
+        else #worry about reading frame
+            donor_zone = range(min(previous_exon.target_from + previous_exon.target_length - 1, introna.target_from - introna.model_from),
+                max(previous_exon.target_from + previous_exon.target_length - 1 + model_lengths[only(previous_exon.queryparts)] - previous_exon.model_to,
+                introna.target_from - 1))
+            acceptor_zone = range(min(intronb.target_from + intronb.target_length, next_exon.target_from - next_exon.model_from + 1),
+                max(intronb.target_from + intronb.target_length + model_lengths[only(intronb.queryparts)] - intronb.model_to,
+                next_exon.target_from))
+            frameshift = mod(frame(next_exon) - frame(previous_exon), 3)
+            #if gene(gene_model) == "petB"; println(donor_zone, "\t", acceptor_zone, "\t", frameshift);end
+            best_score = typemax(Int)
+            best_junction = 0 => 0
+            for i in donor_zone, j in acceptor_zone
+                mod(j - i - 1, 3) ≠ frameshift && continue # won't preserve reading frame
+                #calculate penalties
+                penalty = 0 #positive penalties for intrusion into exon model, intrusion into or extension of intron models 
+                #add scaling factor to favour intrusion of exon over intrusion of intron?
+                penalty += max(0, (previous_exon.target_from + previous_exon.target_length - 1 + model_lengths[only(previous_exon.queryparts)] - previous_exon.model_to) - i)
+                penalty += abs(introna.target_from - introna.model_from - i)
+                penalty += abs(j - (intronb.target_from + intronb.target_length + model_lengths[only(intronb.queryparts)] - intronb.model_to))
+                penalty += max(0, j - (next_exon.target_from - next_exon.model_from + 1))
+                #if gene(gene_model) == "petB"; println(i, "\t", j, "\t", penalty);end
+                if penalty < best_score
+                    best_score = penalty
+                    best_junction = i => j
+                end
+            end
+            #use best_junction to set the exon/intron/exon boundaries
+            if best_junction ≠ (0 => 0)
+                i, j = best_junction
+                previous_exon.target_length = circulardistance(previous_exon.target_from, i + 1, glength)
+                introna.target_from = i + 1
+                intronb.target_length = circulardistance(intronb.target_from, j, glength)
+                current_target_from = next_exon.target_from
+                next_exon.target_from = j
+                next_exon.target_length += (current_target_from - j)
             end
         end
     end

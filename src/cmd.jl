@@ -121,6 +121,8 @@ function main()
     end
     sensitivity = args[:sensitivity]
     reportpseudos = args[:reportpseudos]
+    #read model lengths from .hmm and .cm files
+    get_model_lengths()
     Base.exit_on_sigint(false)
     if Threads.nthreads() == 1
         for (fasta, edits) in zip(fastafiles, gfffiles)
