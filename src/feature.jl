@@ -173,14 +173,15 @@ end
 end =#
 
 function fix_splice_junctions!(gene_model, glength)
-    for introna in filter(x -> endswith(only(x.queryparts), "a"), gene_model)
-        ismissing(introna) && continue
-        i = only(partorder(introna))
+    for (i,f) in enumerate(gene_model)
+        ismissing(f) && continue
+        ~endswith(only(f.queryparts), "a") && continue
         previous_exon = missing
+        introna = f
         intronb = missing
         next_exon = missing
         if i-1 > 0
-            previous_exon = gene_model[i - 1]
+            previous_exon = gene_model[i-1]
         end
         if i + 1 <= length(gene_model)
             intronb = gene_model[i + 1]
@@ -188,7 +189,7 @@ function fix_splice_junctions!(gene_model, glength)
         if i + 2 <= length(gene_model)
             next_exon = gene_model[i + 2]
         end
-#=         if gene(gene_model) == "trnK-UUU"
+#=         if gene(gene_model) == "rps12"
             println(previous_exon)
             println(introna)
             println(intronb)

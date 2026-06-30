@@ -100,7 +100,7 @@ function addgene2record!(uid::UUID, record::GenomicAnnotations.Record, genome, r
             end
         end
     end
-    #if gene(first(features)) == "petD";println(features); println(problems);end
+    #if gene(first(features)) == "rpl16";println(features); println(problems);end
     #~isempty(problems) && return
     
     #gene

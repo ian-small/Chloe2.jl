@@ -81,7 +81,6 @@ function parse_domt(results::IOBuffer, glength::Integer)
         push!(matches, FeatureMatch(orf, [bits[4]], strand, "CDS", 3 * model_from - 2, 3 * model_to, ali_from, ali_length, evalue))
     end
     close(results)
-    #println(filter(x -> startswith(x.query, "ycf2"), matches))
     rationalise_matches!(matches, glength)
 end
 

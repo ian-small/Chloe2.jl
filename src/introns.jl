@@ -27,7 +27,7 @@ function intronsearch(id::AbstractString, genome::CircularSequence, part, gene_m
                 if ~isnothing(acceptor_idx)
                     acceptor_match = gene_model[acceptor_idx]
                     acceptor_site = acceptor_match.target_from
-                    donor_site = acceptor_site - 2000 - leeway
+                    donor_site = acceptor_site - 3000 - leeway
                     intron_strand = acceptor_match.strand
                 end
             end
@@ -43,7 +43,7 @@ function intronsearch(id::AbstractString, genome::CircularSequence, part, gene_m
                 if ~isnothing(donor_idx)
                     donor_match = gene_model[donor_idx]
                     donor_site = donor_match.target_from + donor_match.target_length
-                    acceptor_site = donor_site + 2000 + leeway
+                    acceptor_site = donor_site + 3000 + leeway
                     intron_strand = donor_match.strand
                 end
             end

@@ -1,6 +1,6 @@
 [Chloe2_models]
-git-tree-sha1 = "1ff57527dda4b612593446c939de64c17caef2c3"
+git-tree-sha1 = "c34d6510b2ef45cd494b6afdaf714973cca24024"
 
     [[Chloe2_models.download]]
-    sha256 = "6ea27da7f7646627672839c6ab9e67836e5cac578706c5d8058c6537cb44316c"
-    url = "https://github.com/ian-small/Chloe2_models/archive/refs/tags/v2.0.0-alpha.1.tar.gz"
+    sha256 = "8666d0117ae914a8b0fdbbbd041348dd632df71b734129002150cf392af1ff4f"
+    url = "https://github.com/ian-small/Chloe2_models/archive/refs/tags/v2.0.0-alpha.2.tar.gz"
