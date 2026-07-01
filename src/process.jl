@@ -45,6 +45,7 @@ function fix_exon_borders!(gm::Vector{FeatureMatch}, genome, fstarts, fstartcodo
             fix_start_codon!(gm, (starts, startcodons, stops), glength)
         end
     end
+    #if gene(gm) == "rps4"; println(gm); end
     lastexon = last(gm)
     if ~ismissing(lastexon) && lastexon.type == "CDS"
         if lastexon.strand == '+'
@@ -56,7 +57,7 @@ function fix_exon_borders!(gm::Vector{FeatureMatch}, genome, fstarts, fstartcodo
         end
         fix_stop_codon!(gm, hmm_stop_codon, stops, glength)
     end
-    #if gene(gm) == "trnK-UUU"; println(gm); end
+    #if gene(gm) == "rps4"; println(gm); end
     fix_splice_junctions!(gm, glength)
     gm
 end
@@ -135,7 +136,7 @@ function chloeone(tempfile::TempFile, id::AbstractString, fwd_target::LongDNA{4}
     @info "found $(length(cds_matches)) CDS exons"
     t4 = time()
     @info "time taken to find CDSs: $(t4 - t3)"
-    #println(filter(x -> gene(x) == "rps16", cds_matches))
+    #println(filter(x -> gene(x) == "rps4", cds_matches))
     record = GenomicAnnotations.Record{Gene}()
     record.name = id
     record.sequence = genome[1:glength]
@@ -172,7 +173,7 @@ function chloeone(tempfile::TempFile, id::AbstractString, fwd_target::LongDNA{4}
                 intron_search_time += t7 -t6
             end
         end
-        #if last(key) == "trnI-GAU"; println(gene_models); end
+        #if last(key) == "rps4"; println(gene_models); end
         #finalise gene models
         transsplicedparts = Set{Vector{FeatureMatch}}()
         for gm in gene_models

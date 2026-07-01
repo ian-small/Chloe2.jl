@@ -160,15 +160,15 @@ function fix_stop_codon!(gene_model, stop_codon, stops, glength)
     orfbits = split(lastexon.target_id, "*")
     frame = parse(Int, orfbits[3])
     stop_idx = searchsortedfirst(stops[frame], lastexon.target_from) #index of first in-frame stop following start of last exon
-    if stop_idx == length(stops[frame]) + 1 #no stop before end of genome
-        stop_idx = searchsortedfirst(stops[wrapframe(frame, glength)], 1) #restart search from start of genome in the correct frame
+    if stop_idx == length(stops[frame]) + 1 # stop after end of genome
+        frame = wrapframe(frame, glength)
+        stop_idx = searchsortedfirst(stops[frame], 1) #restart search from start of genome in the correct frame
     end
     next_stop = stops[frame][stop_idx]
     @debug "first stop: $next_stop"
-
     #modify FeatureMatch
     if stop_codon ∉ [dna"TAA", dna"TGA", dna"TAG", dna"CAA", dna"CGA", dna"CAG"] || circulardistance(lastexon.target_from, next_stop, glength) < lastexon.target_length
-        lastexon.target_length = next_stop - lastexon.target_from
+        lastexon.target_length = circulardistance(lastexon.target_from, next_stop, glength)
     end
     lastexon.target_length += 3 # to include stop in last exon
 end
