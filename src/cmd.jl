@@ -1,11 +1,17 @@
 import Logging
 
-function parse_commandline()
-    s = ArgParseSettings(prog="Chloe2", description="annotates angiosperm plastid genomes", usage="Chloe2/src/command.jl [options] <FASTA_files or directories>",
-        epilog="If there is more than one fasta file to annotate then if the options (--gff etc.) are *not* directories
-            they will be used as suffixes for the output filenames and they will be put alongside the input fasta files.",
-        version="2.0.0-alpha.7", add_version=true)
-
+function parse_commandline(args)
+    version = pkgversion(Chloe2)
+    s = ArgParseSettings(;
+        prog = "Chloe2",
+        description = "annotates angiosperm plastid genomes",
+        usage = "Chloe2/src/command.jl [options] <FASTA_files or directories>",
+        epilog = "If there is more than one fasta file to annotate then if the options (--gff etc.) are *not* directories
+              they will be used as suffixes for the output filenames and they will be put alongside the input fasta files.",
+        version = string(version),
+        add_version = true
+    )
+    #! format: off
     @add_arg_table! s begin
         "--edits"
             help = "file/dir for GFF input containing edit site information"
@@ -37,13 +43,13 @@ function parse_commandline()
             help = "files/directories for fasta input"
             nargs = '+'
     end
-    return parse_args(s)
+    return parse_args(args, s)
 end
 const LOGLEVELS = Dict("info" => Logging.Info, "debug" => Logging.Debug, "warn" => Logging.Warn,
     "error" => Logging.Error)
 
-function main()
-    args = parse_commandline()
+function chloe_main(args=ARGS)
+    args = parse_commandline(args)
     llevel = get(LOGLEVELS, lowercase(args["loglevel"]), Logging.Warn)
     global_logger(ConsoleLogger(stderr, llevel, meta_formatter=Logging.default_metafmt))
 
@@ -78,8 +84,8 @@ function main()
     end
 
     if all([isnothing(a) for a in [args["gff"]]])
-        println(stderr, "no output specified! type --help")
-        return
+        @warn "no output specified! type --help"
+        return -1
     end
     function readfiles(d, ext)
         if isdir(d)
@@ -90,6 +96,10 @@ function main()
     fastafiles = [fa for d in args["infiles"] for fa in readfiles(d, r"\.(fa|fna|fasta)")]
     if length(fastafiles) != 1
         ofunc = getout
+        if ~isnothing(args["gff"]) && ~isdir(args["gff"])
+            @warn("if multiple fasta files are given then --gff must be a directory")
+            return -1
+        end
     else
         ofunc = getout1
     end
@@ -111,7 +121,7 @@ function main()
             outfile_gff = ofunc(accession, args["gff"], ".gff")
             if ~overwrite && isfile(outfile_gff)
                 @warn "$outfile_gff exists and overwrite is false"
-                return
+                return -1
             end
             @info "$fasta"
             chloe(fasta; edits=edits, outfile_gff=outfile_gff, tempdir=tmpdir, sensitivity = sensitivity, reportpseudos = reportpseudos)
@@ -132,13 +142,12 @@ function main()
     #read model lengths from .hmm and .cm files
     get_model_lengths()
     Base.exit_on_sigint(false)
-    if Threads.nthreads() == 1
+    if Threads.nthreads() == 1 || length(fastafiles) == 1
         for (fasta, edits) in zip(fastafiles, gfffiles)
             doone(fasta, edits; overwrite = overwrite, sensitivity = sensitivity, reportpseudos = reportpseudos)
         end
     else
         asyncmap(x -> doone(x[1], x[2]; overwrite = overwrite, sensitivity = sensitivity, reportpseudos = reportpseudos), collect(zip(fastafiles, gfffiles)); ntasks = Threads.nthreads())
     end
+    0 # return 0 for success
 end
-
-

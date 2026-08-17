@@ -61,7 +61,7 @@ function intronsearch(id::AbstractString, genome::CircularSequence, part, gene_m
         end
         return cmsearch_intron(fname, "$intron_name"; sensitivity = sensitivity)
     catch
-        println("failed intron search: $id $(part.gene)")
+        @warn ("failed intron search: $id $(part.gene)")
         return missing
     end
 end
@@ -76,8 +76,8 @@ function parse_intron_tbl(results::Union{Missing, IOBuffer}, glength::Int)
         query = bits[3]
         m = match(r"(^.+)\.([^.]+)\.([+|-])\.(-?[0-9]+)-[0-9]+", bits[1]) # (?:\.[0-9]+)? is optional match to .1 version number on accession
         if isnothing(m)
-            println("intronseqname: ", bits[1])
-            println(hits)
+            @debug "intronseqname: $(bits[1])"
+            @debug "hits: $(hits)"
         end
         id = m.captures[1]
         strand = first(m.captures[3])

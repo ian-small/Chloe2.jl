@@ -218,7 +218,7 @@ function fix_splice_junctions!(gene_model, glength)
                 max(intronb.target_from + intronb.target_length + model_lengths[only(intronb.queryparts)] - intronb.model_to,
                 next_exon.target_from))
             frameshift = mod(frame(next_exon) - frame(previous_exon), 3)
-            if gene(gene_model) == "rpoC1"; println(donor_zone, "\t", acceptor_zone, "\t", frameshift);end
+            if gene(gene_model) == "rpoC1"; @debug "$(donor_zone)\t$(acceptor_zone)\t$(frameshift)";end
             best_score = typemax(Int)
             best_junction = 0 => 0
             for i in donor_zone, j in acceptor_zone
@@ -237,7 +237,7 @@ function fix_splice_junctions!(gene_model, glength)
                 penalty += 4 * max(0, (intronb.target_from + intronb.target_length) - j)
                 #exon intrusion penalty
                 penalty += 2 * max(0, j - (next_exon.target_from - next_exon.model_from + 1))
-                if gene(gene_model) == "rpoC1"; println(i, "\t", j, "\t", penalty);end
+                if gene(gene_model) == "rpoC1"; @debug "$(i)\t$(j)\t$(penalty)";end
                 if penalty < best_score
                     best_score = penalty
                     best_junction = i => j
@@ -296,4 +296,3 @@ function addmatches2genemodels!(part, gene_models, feature_matches, glength)
         end
     end
 end
-

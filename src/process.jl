@@ -103,7 +103,7 @@ function chloeone(tempfile::TempFile, id::AbstractString, fwd_target::LongDNA{4}
     glength = length(fwd_target)
     genome = CircularSequence(fwd_target)
     rev_genome = CircularSequence(rev_target)
-    @info "$id\t$glength bp"
+    @info "$(id): $glength bp"
 
     #extend genome
     extended_genome = genome[1:(glength+4000)]
@@ -113,16 +113,16 @@ function chloeone(tempfile::TempFile, id::AbstractString, fwd_target::LongDNA{4}
         write(writer, FASTA.Record(id, extended_genome))
     end
     t1 = time()
-    @info "time taken to prepare genome: $(t1 - t0)"
+    @info "$(id): time taken to prepare genome: $(t1 - t0)"
 
     #find tRNAs
     trn_matches = parse_trn_alignments(search_shattered_genome(tempfile, id, genome; sensitivity = sensitivity), glength)
     filter!(x -> x.target_from <= glength, trn_matches)
     #rationalise_trn_alignments(trn_matches)
     @debug trn_matches
-    @info "found $(length(trn_matches)) tRNA exons"
+    @info "$(id): found $(length(trn_matches)) tRNA exons"
     t2 = time()
-    @info "time taken to find tRNAs: $(t2 - t1)"
+    @info "$(id): time taken to find tRNAs: $(t2 - t1)"
     #println(filter(x -> startswith(only(x.queryparts), "trnI-GAU"), trn_matches))
 
     #find rRNAs
@@ -131,9 +131,9 @@ function chloeone(tempfile::TempFile, id::AbstractString, fwd_target::LongDNA{4}
     filter!(x -> x.evalue < 1e-10, rrn_matches)
     @debug rrn_matches
     #fix_rrn_ends!(v, ftRNAs, rtRNAs, glength)
-    @info "found $(length(rrn_matches)) rRNA exons"
+    @info "$(id): found $(length(rrn_matches)) rRNA exons"
     t3 = time()
-    @info "time taken to find rRNAs: $(t3 - t2)"
+    @info "$(id): time taken to find rRNAs: $(t3 - t2)"
 
     #find CDSs
     startcodon = ncbi_start_codons[1]
@@ -147,9 +147,9 @@ function chloeone(tempfile::TempFile, id::AbstractString, fwd_target::LongDNA{4}
 
     cds_matches = parse_domt(orfsearch(tempfile, id, genome, fstops, rstops, minORF; sensitivity = sensitivity), glength)
     @debug cds_matches
-    @info "found $(length(cds_matches)) CDS exons"
+    @info "$(id): found $(length(cds_matches)) CDS exons"
     t4 = time()
-    @info "time taken to find CDSs: $(t4 - t3)"
+    @info "$(id): time taken to find CDSs: $(t4 - t3)"
     #println(filter(x -> gene(x) == "rps4", cds_matches))
     record = GenomicAnnotations.Record{Gene}()
     record.name = id
@@ -218,8 +218,8 @@ function chloeone(tempfile::TempFile, id::AbstractString, fwd_target::LongDNA{4}
     end
     flag_duplicates!(record)
     t5 = time()
-    @info "time taken to build and verify gene models: $(t5 - t4)"
-    @info "of which searching for introns took: $intron_search_time"
+    @info "$(id): time taken to build and verify gene models: $(t5 - t4)"
+    @info "$(id): of which searching for introns took: $intron_search_time"
     return record
 end
 
@@ -239,7 +239,7 @@ function chloe(
     end
 
     t7 = time()
-    @info "time taken to prepare and write outputs: $(t7 - t6)"
+    @info "$(record.name): time taken to prepare and write outputs: $(t7 - t6)"
 end
 
 function chloe(

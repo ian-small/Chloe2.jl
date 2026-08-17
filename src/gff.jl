@@ -40,7 +40,9 @@ function writeGFF(record::GenomicAnnotations.Record, outfile::Union{String,IO}; 
     blacklist = sort!(unique!(index.(pseudogenes)))
     sort!(gffrecord.genes)
     if isa(outfile, IO)
-        printgff(GFF.Writer(outfile::IO).output, gffrecord, blacklist; reportpseudos = reportpseudos)
+        out = GFF.Writer(outfile::IO)
+        printgff(out.output, gffrecord, blacklist; reportpseudos = reportpseudos)
+        flush(out.output)
     else
         open(GFF.Writer, outfile) do out
             printgff(out.output, gffrecord, blacklist; reportpseudos = reportpseudos)

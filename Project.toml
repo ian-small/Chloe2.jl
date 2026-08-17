@@ -30,3 +30,6 @@ Pkg = "1.12.1"
 Printf = "1.11.0"
 UUIDs = "1.11.0"
 Unicode = "1.11.0"
+
+[apps]
+chloe2 = { julia_flags = ["--threads=auto", "--optimize=2", "--startup-file=no"] }
